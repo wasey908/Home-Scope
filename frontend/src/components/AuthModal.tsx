@@ -21,6 +21,14 @@ const AuthModal = ({ open, onClose, onAuth, onGuest, hideGuest }: AuthModalProps
 
   const handleSubmit = async (mode: "login" | "register") => {
     setError("");
+
+    // Basic email validation regex
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
     setLoading(true);
 
     try {
