@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import create_tables
-from routers import auth, scenarios, scoring, preferences, routing
+from routers import auth, scenarios, scoring, preferences, routing, ml_admin
 
 app = FastAPI(
     title="HomeScope API",
@@ -32,6 +32,7 @@ app.include_router(scenarios.router)
 app.include_router(scoring.router)
 app.include_router(preferences.router)
 app.include_router(routing.router)
+app.include_router(ml_admin.router)
 
 
 @app.on_event("startup")
