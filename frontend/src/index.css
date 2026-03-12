@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 33% 97%;
+    --foreground: 220 20% 18%;
+
+    --card: 40 30% 99%;
+    --card-foreground: 220 20% 18%;
+
+    --popover: 40 30% 99%;
+    --popover-foreground: 220 20% 18%;
+
+    --primary: 152 35% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 40 25% 93%;
+    --secondary-foreground: 220 20% 18%;
+
+    --muted: 40 20% 94%;
+    --muted-foreground: 220 10% 50%;
+
+    --accent: 24 85% 58%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 20% 90%;
+    --input: 40 20% 88%;
+    --ring: 152 35% 45%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 40 30% 97%;
+    --sidebar-foreground: 220 20% 18%;
+    --sidebar-primary: 152 35% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 40 25% 93%;
+    --sidebar-accent-foreground: 220 20% 18%;
+    --sidebar-border: 40 20% 90%;
+    --sidebar-ring: 152 35% 45%;
+
+    /* Custom HomeScope tokens */
+    --homescope-green: 152 35% 45%;
+    --homescope-green-light: 152 35% 92%;
+    --homescope-orange: 24 85% 58%;
+    --homescope-orange-light: 24 85% 93%;
+    --homescope-warm-bg: 40 33% 97%;
+    --homescope-cream: 40 30% 95%;
+    --homescope-shadow: 0 0% 0% / 0.06;
+    --homescope-shadow-hover: 0 0% 0% / 0.12;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Fraunces', serif;
+  }
+}
+
+@layer utilities {
+  .homescope-card-shadow {
+    box-shadow: 0 4px 24px -4px hsl(var(--homescope-shadow));
+    transition: box-shadow 0.3s ease;
+  }
+
+  .homescope-card-shadow:hover {
+    box-shadow: 0 8px 32px -4px hsl(var(--homescope-shadow-hover));
+  }
+
+  .homescope-gradient-green {
+    background: linear-gradient(135deg, hsl(152 35% 45%), hsl(152 35% 55%));
+  }
+
+  .homescope-gradient-orange {
+    background: linear-gradient(135deg, hsl(24 85% 55%), hsl(24 85% 65%));
+  }
+}
