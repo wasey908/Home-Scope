@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { PrimaryButton, SecondaryButton } from "@/components/HomescopeButtons";
 import { Home, Plus, X, ClipboardPaste, DollarSign, Pencil, Check } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useWizardData, type HomeEntry } from "@/lib/wizardContext";
 import homesGrid from "@/assets/homes-grid.png";
 
@@ -18,23 +18,23 @@ const HOUSE_COLORS = [
 // Improved bulk paste parser: supports multiple formats
 function parseBulkLine(line: string): HomeEntry {
   const trimmed = line.trim();
-  
+
   // Try: Address (800) or Address (£800)
   const parenMatch = trimmed.match(/^(.+?)\s*\(£?\s*(\d[\d,]*)\s*\)\s*$/);
   if (parenMatch) return { address: parenMatch[1].trim(), rent: parenMatch[2].replace(/,/g, "") };
-  
+
   // Try: Address - £800 or Address - 800
   const dashMatch = trimmed.match(/^(.+?)\s*[-–—]\s*£?\s*(\d[\d,]*)\s*$/);
   if (dashMatch) return { address: dashMatch[1].trim(), rent: dashMatch[2].replace(/,/g, "") };
-  
+
   // Try: Address | 800
   const pipeMatch = trimmed.match(/^(.+?)\s*\|\s*£?\s*(\d[\d,]*)\s*$/);
   if (pipeMatch) return { address: pipeMatch[1].trim(), rent: pipeMatch[2].replace(/,/g, "") };
-  
+
   // Try: Address, 800 (comma + number at end)
   const commaMatch = trimmed.match(/^(.+?),\s*£?\s*(\d[\d,]*)\s*$/);
   if (commaMatch) return { address: commaMatch[1].trim(), rent: commaMatch[2].replace(/,/g, "") };
-  
+
   // Try: tab-separated
   const tabParts = trimmed.split("\t").map(p => p.trim());
   if (tabParts.length >= 2) {
@@ -43,7 +43,7 @@ function parseBulkLine(line: string): HomeEntry {
       return { address: tabParts.slice(0, -1).join(", "), rent: rentVal };
     }
   }
-  
+
   // Fallback: just address, no rent
   return { address: trimmed, rent: "" };
 }
@@ -59,31 +59,20 @@ const HomesStep = ({ onNext, onBack }: HomesStepProps) => {
   const [editAddress, setEditAddress] = useState("");
   const [editRent, setEditRent] = useState("");
 
+  // Sync local state FROM context when context changes externally (e.g. scenario load)
+  const isLocalUpdate = useRef(false);
   useEffect(() => {
+    if (!isLocalUpdate.current) {
+      setLocalHomes(data.homes);
+    }
+    isLocalUpdate.current = false;
+  }, [data.homes]);
+
+  // Sync TO context when local homes change
+  useEffect(() => {
+    isLocalUpdate.current = true;
     setHomes(homes);
   }, [homes, setHomes]);
-
-  // Auto-save draft to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem("homescope_draft_homes", JSON.stringify(homes));
-    } catch {}
-  }, [homes]);
-
-  // Restore draft on mount
-  useEffect(() => {
-    if (data.homes.length === 0) {
-      try {
-        const draft = localStorage.getItem("homescope_draft_homes");
-        if (draft) {
-          const parsed = JSON.parse(draft);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setLocalHomes(parsed);
-          }
-        }
-      } catch {}
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addHome = () => {
     if (address.trim()) {
