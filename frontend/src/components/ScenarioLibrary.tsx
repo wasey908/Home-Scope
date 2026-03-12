@@ -20,6 +20,7 @@ import {
 interface ScenarioLibraryProps {
   onOpenScenario: (scenario: ScenarioData) => void;
   onNewScenario: () => void;
+  refreshTrigger?: number;
 }
 
 const formatDate = (iso: string) => {
@@ -36,7 +37,7 @@ const scenarioSubtitle = (s: ScenarioData) => {
   return parts.length ? parts.join(" · ") : "Not started";
 };
 
-const ScenarioLibrary = ({ onOpenScenario, onNewScenario }: ScenarioLibraryProps) => {
+const ScenarioLibrary = ({ onOpenScenario, onNewScenario, refreshTrigger }: ScenarioLibraryProps) => {
   const [scenarios, setScenarios] = useState<ScenarioData[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -45,7 +46,7 @@ const ScenarioLibrary = ({ onOpenScenario, onNewScenario }: ScenarioLibraryProps
   useEffect(() => {
     migrateExistingData();
     getAllScenarios().then(setScenarios);
-  }, []);
+  }, [refreshTrigger]);
 
   const refresh = () => { getAllScenarios().then(setScenarios); };
 
