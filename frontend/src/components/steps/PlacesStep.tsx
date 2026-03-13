@@ -37,8 +37,18 @@ const PlacesStep = ({ onNext, onBack }: PlacesStepProps) => {
   const [clickedIcon, setClickedIcon] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync to context when places change
+  // Sync local state FROM context when context changes externally (e.g. scenario load)
+  const isLocalUpdate = useRef(false);
   useEffect(() => {
+    if (!isLocalUpdate.current) {
+      setLocalPlaces(data.places);
+    }
+    isLocalUpdate.current = false;
+  }, [data.places]);
+
+  // Sync TO context when local places change
+  useEffect(() => {
+    isLocalUpdate.current = true;
     setPlaces(places);
   }, [places, setPlaces]);
 
@@ -233,9 +243,8 @@ const PlacesStep = ({ onNext, onBack }: PlacesStepProps) => {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9, x: -30 }}
                 transition={{ duration: 0.35, ease: "easeOut" }}
-                className={`bg-card rounded-xl homescope-card-shadow p-4 flex items-center justify-between gap-3 ${
-                  editIndex === index ? "ring-2 ring-primary/40" : ""
-                }`}
+                className={`bg-card rounded-xl homescope-card-shadow p-4 flex items-center justify-between gap-3 ${editIndex === index ? "ring-2 ring-primary/40" : ""
+                  }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-9 h-9 rounded-lg bg-homescope-green-light flex items-center justify-center shrink-0">
