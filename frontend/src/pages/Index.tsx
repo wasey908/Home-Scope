@@ -170,6 +170,7 @@ const Index = () => {
     const savedRoutes = savedResults.routes || [];
     const savedScores = savedResults.scores || [];
     const savedRoutingSettings = inputs.routingSettings || savedResults.routingSettings || undefined;
+    const savedHomeStatuses = savedResults.homeStatuses || {};
 
     loadScenarioData({
       places: inputs.places || [],
@@ -178,6 +179,7 @@ const Index = () => {
       routingSettings: savedRoutingSettings,
       routes: savedRoutes,
       scores: savedScores,
+      homeStatuses: savedHomeStatuses,
     });
 
     const resumeStep = Math.min(s.lastCompletedStep, STEPS.length - 1);
