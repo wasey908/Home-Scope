@@ -16,7 +16,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { AnimatedCard } from "@/components/WizardComponents";
-import { updateScenario } from "@/lib/scenarios";
+import { updateScenario, createScenario } from "@/lib/scenarios";
+import SaveScenarioModal from "@/components/SaveScenarioModal";
+import MLStatusPanel from "@/components/MLStatusPanel";
 import { useToast } from "@/hooks/use-toast";
 import { useWizardData } from "@/lib/wizardContext";
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow, Polyline } from "@react-google-maps/api";
@@ -28,7 +30,7 @@ import {
 } from "@/lib/routingTypes";
 import {
   loadWeights, resetWeights, updateWeights, computeAverageFeatures,
-  getInteractionCount,
+  getInteractionCount, logInteraction,
   type PreferenceWeights, type HomeFeatureVector,
 } from "@/lib/preferenceLearning";
 
@@ -37,6 +39,8 @@ interface ResultsStepProps {
   onRestart: () => void;
   scenarioId?: string | null;
   onGoToLibrary?: () => void;
+  isLoggedIn?: boolean;
+  onRequestAuth?: () => void;
 }
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "AIzaSyBfqDpKqiWqT4dPhjjotLej_mth2PN_ngc";
@@ -139,10 +143,10 @@ function decodePolyline(encoded: string): { lat: number; lng: number }[] {
   return points;
 }
 
-const ResultsStep = ({ onBack, onRestart, scenarioId, onGoToLibrary }: ResultsStepProps) => {
+const ResultsStep = ({ onBack, onRestart, scenarioId, onGoToLibrary, isLoggedIn, onRequestAuth }: ResultsStepProps) => {
   const { toast } = useToast();
   const { data: wizardData, setScores: setContextScores } = useWizardData();
-  const [statuses, setStatuses] = useState<Record<number, "neutral" | "liked" | "disliked">>({});
+  const [statuses, setStatuses] = useState<Record<number, "neutral" | "liked" | "disliked">>(wizardData.homeStatuses || {});
   const [detailId, setDetailId] = useState<number | null>(null);
   const [selectedHomeId, setSelectedHomeId] = useState<number | null>(null);
   const [showHomes, setShowHomes] = useState(true);
@@ -157,6 +161,12 @@ const ResultsStep = ({ onBack, onRestart, scenarioId, onGoToLibrary }: ResultsSt
   const [prefWeights, setPrefWeights] = useState<PreferenceWeights | null>(null);
   const [interactionCount, setInteractionCount] = useState(0);
   const [learningActive, setLearningActive] = useState(false);
+
+  // Save scenario modal state
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  // "update" = overwrite existing, "new" = save as new scenario, "choose" = show choice dialog
+  const [saveMode, setSaveMode] = useState<"choose" | "update" | "new" | null>(null);
 
   // Load weights on mount
   useEffect(() => {
@@ -246,6 +256,11 @@ const ResultsStep = ({ onBack, onRestart, scenarioId, onGoToLibrary }: ResultsSt
     const currentStatus = statuses[id];
     const newStatus = currentStatus === status ? "neutral" : status;
 
+    // Log ML interaction for training data
+    if (newStatus !== "neutral" && scenarioId) {
+      logInteraction(scenarioId, id, newStatus === "liked" ? "liked" : "disliked");
+    }
+
     if (newStatus !== "neutral" && prefWeights) {
       const home = scores.find(s => s.homeId === id);
       if (home?.featureVector) {
@@ -258,7 +273,7 @@ const ResultsStep = ({ onBack, onRestart, scenarioId, onGoToLibrary }: ResultsSt
         setTimeout(() => setLearningActive(false), 2000);
       }
     }
-  }, [prefWeights, averageFeatures, scores, statuses]);
+  }, [prefWeights, averageFeatures, scores, statuses, scenarioId]);
 
   const handleResetLearning = useCallback(async () => {
     setStatuses({});
@@ -270,12 +285,78 @@ const ResultsStep = ({ onBack, onRestart, scenarioId, onGoToLibrary }: ResultsSt
   const detailHome = detailId !== null ? scores.find((s) => s.homeId === detailId) : null;
   const selectedHome = selectedHomeId !== null ? scores.find((s) => s.homeId === selectedHomeId) : null;
 
-  const handleSave = async () => {
-    const scenario = { savedAt: new Date().toISOString(), step: "complete" };
-    if (scenarioId) {
-      await updateScenario(scenarioId, { lastCompletedStep: 5, results: scenario });
+  const handleSaveClick = () => {
+    if (!isLoggedIn) {
+      onRequestAuth?.();
+      return;
     }
-    toast({ title: "Scenario saved successfully", description: "Saved to your account." });
+    if (scenarioId) {
+      // Existing scenario: ask user whether to overwrite or save as new
+      setSaveMode("choose");
+    } else {
+      // Brand new session: go straight to name modal
+      setSaveMode("new");
+      setSaveModalOpen(true);
+    }
+  };
+
+  // Builds the results payload including routes, scores and routingSettings
+  const buildResultsPayload = () => ({
+    savedAt: new Date().toISOString(),
+    step: "complete",
+    routes: wizardData.routes,
+    scores,
+    routingSettings: localSettings,
+    homeStatuses: statuses,
+  });
+
+  // Update the existing scenario in-place (no name change)
+  const handleUpdateExisting = async () => {
+    if (!scenarioId) return;
+    setSaveLoading(true);
+    try {
+      await updateScenario(scenarioId, {
+        lastCompletedStep: 5,
+        results: buildResultsPayload() as any,
+        wizardInputs: {
+          places: wizardData.places,
+          homes: wizardData.homes,
+          travel: wizardData.travel,
+          routingSettings: localSettings,
+        },
+      });
+      toast({ title: "Scenario updated!", description: "Your changes have been saved." });
+      setSaveMode(null);
+    } catch {
+      toast({ title: "Save failed", description: "Something went wrong.", variant: "destructive" });
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  // Save as a brand-new named scenario
+  const handleSaveWithName = async (name: string) => {
+    setSaveLoading(true);
+    try {
+      const newScenario = await createScenario(name);
+      await updateScenario(newScenario.id, {
+        lastCompletedStep: 5,
+        results: buildResultsPayload() as any,
+        wizardInputs: {
+          places: wizardData.places,
+          homes: wizardData.homes,
+          travel: wizardData.travel,
+          routingSettings: localSettings,
+        },
+      });
+      toast({ title: "Scenario saved!", description: `"${name}" has been saved to your account.` });
+      setSaveModalOpen(false);
+      setSaveMode(null);
+    } catch {
+      toast({ title: "Save failed", description: "Something went wrong. Please try again.", variant: "destructive" });
+    } finally {
+      setSaveLoading(false);
+    }
   };
 
   const handleModeWeightChange = (mode: TravelMode, value: number) => {
@@ -714,6 +795,9 @@ const ResultsStep = ({ onBack, onRestart, scenarioId, onGoToLibrary }: ResultsSt
           )}
         </AnimatePresence>
 
+        {/* ML Status Dashboard */}
+        <MLStatusPanel />
+
         {/* Results cards */}
         <div className="space-y-4">
           <AnimatePresence mode="popLayout">
@@ -840,7 +924,7 @@ const ResultsStep = ({ onBack, onRestart, scenarioId, onGoToLibrary }: ResultsSt
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="flex flex-col gap-3 pt-4">
           <div className="flex gap-3">
             <SecondaryButton onClick={onBack}>← Back</SecondaryButton>
-            <PrimaryButton onClick={handleSave} className="flex-1">
+            <PrimaryButton onClick={handleSaveClick} className="flex-1">
               <Save className="h-4 w-4 mr-2" /> Save this scenario
             </PrimaryButton>
           </div>
@@ -951,6 +1035,72 @@ const ResultsStep = ({ onBack, onRestart, scenarioId, onGoToLibrary }: ResultsSt
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Save Scenario — Choice: Update existing or Save as new */}
+      <AnimatePresence>
+        {saveMode === "choose" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
+              onClick={() => setSaveMode(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="relative w-full max-w-sm bg-card rounded-2xl homescope-card-shadow p-8 space-y-5"
+            >
+              <button
+                onClick={() => setSaveMode(null)}
+                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div className="text-center space-y-1.5">
+                <h2 className="text-2xl font-serif font-bold text-foreground">Save scenario</h2>
+                <p className="text-sm text-muted-foreground">
+                  This scenario already has a saved version. What would you like to do?
+                </p>
+              </div>
+              <div className="space-y-2.5">
+                <PrimaryButton
+                  onClick={handleUpdateExisting}
+                  disabled={saveLoading}
+                  className="w-full"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {saveLoading ? "Saving…" : "Update this scenario"}
+                </PrimaryButton>
+                <SecondaryButton
+                  onClick={() => { setSaveMode("new"); setSaveModalOpen(true); }}
+                  disabled={saveLoading}
+                  className="w-full"
+                >
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Save as a new scenario
+                </SecondaryButton>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Save Scenario Name Modal — for new scenarios */}
+      <SaveScenarioModal
+        open={saveModalOpen}
+        onClose={() => { setSaveModalOpen(false); setSaveMode(null); }}
+        onSave={handleSaveWithName}
+        loading={saveLoading}
+      />
     </div>
   );
 };
